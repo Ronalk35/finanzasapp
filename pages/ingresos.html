@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ingresos – FinanzasApp</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<div class="app-layout" id="app-wrapper"></div>
+
+<!-- MODAL NUEVO/EDITAR INGRESO -->
+<div class="modal-overlay" id="modalIngreso">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalIngresoTitle">Nuevo ingreso</h3>
+      <button class="modal-close" onclick="closeModal('modalIngreso')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ingresoId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input type="date" id="ingresoFecha" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto (S/) *</label>
+          <input type="number" id="ingresoMonto" class="form-control" placeholder="0.00" step="0.01" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría *</label>
+        <select id="ingresoCategoria" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <input type="text" id="ingresoDesc" class="form-control" placeholder="Ej: Pago quincenal..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalIngreso')">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarIngreso" onclick="guardarIngreso()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+initTheme();
+injectLayout('ingresos', 'Ingresos');
+if (!requireAuth()) throw new Error('no auth');
+
+let editingId = null;
+
+async function onPageReady() {
+  document.getElementById('pageContent').innerHTML =
+    `<div class="page-loading"><div class="loading-spinner"></div> Cargando datos...</div>`;
+  await Promise.all([loadCategorias(), cargarIngresos()]);
+  renderPage();
+}
+
+function renderPage() {
+  const content = document.getElementById('pageContent');
+  content.innerHTML = `
+    <!-- KPIs -->
+    <div class="kpi-grid section-gap" id="kpiIngresos"></div>
+
+    <!-- Filtros -->
+    <div class="filter-bar section-gap">
+      <div class="filter-group">
+        <span class="filter-label">Año</span>
+        <select class="filter-select" id="filtroAnio" onchange="renderTabla()">
+          ${getYearOptions()}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Mes</span>
+        <select class="filter-select" id="filtroMes" onchange="renderTabla()">
+          <option value="">Todos</option>
+          ${MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Categoría</span>
+        <select class="filter-select" id="filtroCateg" onchange="renderTabla()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn-primary" onclick="abrirModalNuevo()">
+        ➕ Nuevo ingreso
+      </button>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Registro de ingresos</div>
+          <div class="card-subtitle" id="subtitleIngresos"></div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Categoría</th>
+              <th>Descripción</th>
+              <th>Monto</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaIngresos"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  renderKPIs();
+  renderTabla();
+  populateFiltroCat();
+}
+
+function getYearOptions() {
+  const cy = getCurrentYear();
+  return [cy-1, cy, cy+1].map(y => `<option value="${y}"${y===cy?' selected':''}>${y}</option>`).join('');
+}
+
+async function cargarIngresos() {
+  const res = await apiCall({ action: 'getIngresos', userId: State.user.id });
+  if (res.success) State.ingresos = normalizeRows(res.data);
+}
+
+function filteredIngresos() {
+  const anio  = document.getElementById('filtroAnio')?.value;
+  const mes   = document.getElementById('filtroMes')?.value;
+  const categ = document.getElementById('filtroCateg')?.value;
+  return State.ingresos.filter(r => {
+    if (anio  && String(r.Anio) !== anio) return false;
+    if (mes   && String(r.Mes)  !== mes)  return false;
+    if (categ && r.Categoria    !== categ) return false;
+    return true;
+  });
+}
+
+function renderKPIs() {
+  const cy = getCurrentYear();
+  const cm = getCurrentMonth();
+  const total  = State.ingresos.reduce((s, r) => s + parseFloat(r.Monto||0), 0);
+  const anual  = State.ingresos.filter(r => String(r.Anio) === String(cy)).reduce((s, r) => s + parseFloat(r.Monto||0), 0);
+  const mensual = State.ingresos.filter(r => String(r.Anio) === String(cy) && String(r.Mes) === String(cm)).reduce((s, r) => s + parseFloat(r.Monto||0), 0);
+
+  document.getElementById('kpiIngresos').innerHTML = `
+    <div class="kpi-card kpi-income">
+      <div class="kpi-icon">💵</div>
+      <div class="kpi-label">Este mes</div>
+      <div class="kpi-value">${formatMoney(mensual)}</div>
+      <div class="kpi-sub">${getMonthName(cm)} ${cy}</div>
+    </div>
+    <div class="kpi-card kpi-income">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">Acumulado ${cy}</div>
+      <div class="kpi-value">${formatMoney(anual)}</div>
+      <div class="kpi-sub">Año en curso</div>
+    </div>
+    <div class="kpi-card kpi-income">
+      <div class="kpi-icon">🏆</div>
+      <div class="kpi-label">Total general</div>
+      <div class="kpi-value">${formatMoney(total)}</div>
+      <div class="kpi-sub">${State.ingresos.length} registros</div>
+    </div>
+  `;
+}
+
+function renderTabla() {
+  const rows = filteredIngresos().sort((a, b) => (b.Fecha || '').localeCompare(a.Fecha || ''));
+  const tbody = document.getElementById('tablaIngresos');
+  const sub = document.getElementById('subtitleIngresos');
+
+  if (!tbody) return;
+
+  const total = rows.reduce((s, r) => s + parseFloat(r.Monto||0), 0);
+  if (sub) sub.textContent = `${rows.length} registros · Total: ${formatMoney(total)}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">💵</div><div class="empty-state-title">Sin ingresos registrados</div><div class="empty-state-desc">Haz clic en "Nuevo ingreso" para comenzar.</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${formatDate(r.Fecha)}</td>
+      <td><span class="badge badge-green">${r.Categoria || '—'}</span></td>
+      <td>${r.Descripcion || '—'}</td>
+      <td class="amount positive">${formatMoney(r.Monto)}</td>
+      <td>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick="editarIngreso('${r.ID}')">✏️</button>
+          <button class="btn btn-ghost btn-sm btn-icon" title="Eliminar" onclick="eliminarIngreso('${r.ID}')">🗑️</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function populateFiltroCat() {
+  const sel = document.getElementById('filtroCateg');
+  const cats = [...new Set(State.ingresos.map(r => r.Categoria).filter(Boolean))].sort();
+  cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+}
+
+function abrirModalNuevo() {
+  editingId = null;
+  document.getElementById('modalIngresoTitle').textContent = 'Nuevo ingreso';
+  document.getElementById('ingresoId').value = '';
+  document.getElementById('ingresoFecha').value = todayPeru();
+  document.getElementById('ingresoMonto').value = '';
+  document.getElementById('ingresoDesc').value = '';
+  populateCategoriaSelect();
+  openModal('modalIngreso');
+}
+
+function editarIngreso(id) {
+  const r = State.ingresos.find(x => x.ID === id);
+  if (!r) return;
+  editingId = id;
+  document.getElementById('modalIngresoTitle').textContent = 'Editar ingreso';
+  document.getElementById('ingresoId').value = id;
+  document.getElementById('ingresoFecha').value = normalizeDateStr(r.Fecha);
+  document.getElementById('ingresoMonto').value = r.Monto;
+  document.getElementById('ingresoDesc').value = r.Descripcion || '';
+  populateCategoriaSelect(r.Categoria);
+  openModal('modalIngreso');
+}
+
+function populateCategoriaSelect(selected = '') {
+  const sel = document.getElementById('ingresoCategoria');
+  sel.innerHTML = State.categoriasIngresos.map(c =>
+    `<option value="${c.Nombre}"${c.Nombre === selected ? ' selected' : ''}>${c.Nombre}</option>`
+  ).join('');
+}
+
+async function guardarIngreso() {
+  const fecha    = document.getElementById('ingresoFecha').value;
+  const monto    = document.getElementById('ingresoMonto').value;
+  const categ    = document.getElementById('ingresoCategoria').value;
+  const desc     = document.getElementById('ingresoDesc').value.trim();
+
+  if (!fecha || !monto || !categ) return showToast('Completa los campos obligatorios', 'error');
+  if (parseFloat(monto) <= 0) return showToast('El monto debe ser mayor a 0', 'error');
+
+  const btn = document.getElementById('btnGuardarIngreso');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+
+  const fields = dateToFields(fecha);
+  const params = {
+    IDUsuario: State.user.id,
+    ...fields,
+    Categoria: categ,
+    Descripcion: desc,
+    Monto: parseFloat(monto).toFixed(2),
+  };
+
+  try {
+    let res;
+    if (editingId) {
+      res = await apiCall({ action: 'updateIngreso', ID: editingId, ...params });
+      if (res.success) {
+        const idx = State.ingresos.findIndex(x => x.ID === editingId);
+        if (idx >= 0) State.ingresos[idx] = { ID: editingId, ...params };
+        showToast('Ingreso actualizado', 'success');
+      }
+    } else {
+      res = await apiCall({ action: 'addIngreso', ...params });
+      if (res.success) {
+        State.ingresos.push(res.data);
+        showToast('Ingreso registrado', 'success');
+      }
+    }
+    if (res.success) { closeModal('modalIngreso'); renderKPIs(); renderTabla(); }
+    else showToast(res.error || 'Error al guardar', 'error');
+  } catch {
+    showToast('Error de conexión', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+async function eliminarIngreso(id) {
+  if (!confirm('¿Eliminar este ingreso?')) return;
+  try {
+    const res = await apiCall({ action: 'deleteIngreso', ID: id });
+    if (res.success) {
+      State.ingresos = State.ingresos.filter(x => x.ID !== id);
+      renderKPIs(); renderTabla();
+      showToast('Ingreso eliminado', 'success');
+    } else showToast(res.error || 'Error al eliminar', 'error');
+  } catch { showToast('Error de conexión', 'error'); }
+}
+
+onPageReady();
+</script>
+</body>
+</html>

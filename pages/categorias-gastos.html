@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Categorías de Gastos – FinanzasApp</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<div class="app-layout" id="app-wrapper"></div>
+
+<!-- MODAL NUEVA CATEGORÍA -->
+<div class="modal-overlay" id="modalCat">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Nueva categoría de gasto</h3>
+      <button class="modal-close" onclick="closeModal('modalCat')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre de categoría *</label>
+        <input type="text" id="catNombre" class="form-control" placeholder="Ej: Mascotas" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subcategorías</label>
+        <p class="form-hint">Separa con coma. Ej: Comida, Veterinario, Accesorios</p>
+        <input type="text" id="catSubs" class="form-control" placeholder="Sub1, Sub2, Sub3" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCat')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCategoria()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR SUBCATEGORÍAS -->
+<div class="modal-overlay" id="modalSub">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalSubTitle">Editar subcategorías</h3>
+      <button class="modal-close" onclick="closeModal('modalSub')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="form-hint" style="margin-bottom:12px">Separa con coma. Ej: Sub1, Sub2, Sub3</p>
+      <input type="hidden" id="subCatId" />
+      <div class="form-group">
+        <label class="form-label">Subcategorías</label>
+        <textarea id="subTexto" class="form-control" rows="4" placeholder="Sub1, Sub2, Sub3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalSub')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarSubs()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+initTheme();
+injectLayout('cat-gastos', 'Categorías de Gastos');
+if (!requireAuth()) throw new Error('no auth');
+
+async function onPageReady() {
+  document.getElementById('pageContent').innerHTML =
+    `<div class="page-loading"><div class="loading-spinner"></div> Cargando datos...</div>`;
+  await loadCategorias();
+  renderPage();
+}
+
+function renderPage() {
+  const content = document.getElementById('pageContent');
+  const cats = State.categoriasGastos;
+
+  const rows = cats.map((c,i) => {
+    const subs = (c.Subcategorias||'').split('|').filter(Boolean);
+    const isDefault = c.EsDefault==='true' || c.IDUsuario==='DEFAULT';
+    return `
+      <tr>
+        <td class="text-muted">${i+1}</td>
+        <td><strong>${c.Nombre}</strong></td>
+        <td>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${subs.map(s=>`<span class="badge badge-gray">${s}</span>`).join('')}
+            ${!subs.length ? '<span class="text-muted" style="font-size:12px">Sin subcategorías</span>' : ''}
+          </div>
+        </td>
+        <td><span class="badge badge-gray">${isDefault ? 'Por defecto' : 'Personalizada'}</span></td>
+        <td>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" onclick="editarSubs('${c.ID}','${c.Nombre}','${(c.Subcategorias||'').replace(/\|/g,', ')}')">✏️ Subcategorías</button>
+            ${!isDefault ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="eliminarCategoria('${c.ID}')">🗑️</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Categorías de gastos</div>
+          <div class="card-subtitle">Administra categorías y subcategorías para tus gastos</div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modalCat')">➕ Nueva categoría</button>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr><th>#</th><th>Categoría</th><th>Subcategorías</th><th>Tipo</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            ${cats.length ? rows : `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">🗂️</div><div class="empty-state-title">Sin categorías</div></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function guardarCategoria() {
+  const nombre = document.getElementById('catNombre').value.trim();
+  const subsRaw = document.getElementById('catSubs').value.trim();
+  if (!nombre) return showToast('Ingresa un nombre','error');
+
+  const subs = subsRaw ? subsRaw.split(',').map(s=>s.trim()).filter(Boolean).join('|') : '';
+
+  try {
+    const res = await apiCall({ action:'addCategoriaGasto', ID:genId('CG'), IDUsuario:State.user.id, Nombre:nombre, Subcategorias:subs, EsDefault:'false' });
+    if (res.success) {
+      State.categoriasGastos.push(res.data);
+      showToast('Categoría creada','success');
+      closeModal('modalCat');
+      document.getElementById('catNombre').value='';
+      document.getElementById('catSubs').value='';
+      renderPage();
+    } else showToast(res.error||'Error','error');
+  } catch { showToast('Error de conexión','error'); }
+}
+
+function editarSubs(id, nombre, subsStr) {
+  document.getElementById('subCatId').value = id;
+  document.getElementById('modalSubTitle').textContent = `Subcategorías: ${nombre}`;
+  document.getElementById('subTexto').value = subsStr;
+  openModal('modalSub');
+}
+
+async function guardarSubs() {
+  const id     = document.getElementById('subCatId').value.trim();
+  const raw    = document.getElementById('subTexto').value.trim();
+  const nombre = document.getElementById('modalSubTitle').textContent.replace('Subcategorías: ', '').trim();
+
+  if (!id) return showToast('Error: ID vacío', 'error');
+
+  const subs = raw.split(',').map(s => s.trim()).filter(Boolean).join('|');
+
+  const btn = document.querySelector('#modalSub .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    // Estrategia: borrar la fila existente y crear una nueva con los datos actualizados.
+    // Usa solo acciones que YA existen en el backend desde el inicio.
+    const cat = State.categoriasGastos.find(c => c.ID === id);
+    const esDefault = cat ? (cat.EsDefault || 'false') : 'false';
+    const idUsuario = cat ? (cat.IDUsuario || State.user.id) : State.user.id;
+
+    // 1. Borrar la fila actual
+    const resDel = await apiCall({ action: 'deleteCategoriaGasto', ID: id });
+    console.log('DELETE:', JSON.stringify(resDel));
+
+    if (!resDel.success) {
+      showToast('❌ No se pudo eliminar fila antigua: ' + (resDel.error || ''), 'error', 7000);
+      return;
+    }
+
+    // 2. Insertar fila nueva con el mismo ID, nombre, usuario pero subcategorías actualizadas
+    const resAdd = await apiCall({
+      action:        'addCategoriaGasto',
+      ID:            id,
+      IDUsuario:     idUsuario,
+      Nombre:        nombre,
+      Subcategorias: subs,
+      EsDefault:     esDefault
+    });
+    console.log('ADD:', JSON.stringify(resAdd));
+
+    if (resAdd.success) {
+      // Actualizar estado local
+      if (cat) cat.Subcategorias = subs;
+      showToast('✅ Subcategorías guardadas correctamente', 'success');
+      closeModal('modalSub');
+      renderPage();
+    } else {
+      showToast('❌ Error al guardar: ' + (resAdd.error || ''), 'error', 7000);
+    }
+
+  } catch(e) {
+    showToast('❌ Error de conexión: ' + e.message, 'error', 7000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar cambios';
+  }
+}
+
+async function eliminarCategoria(id) {
+  if (!confirm('¿Eliminar esta categoría y sus subcategorías?')) return;
+  try {
+    const res = await apiCall({ action:'deleteCategoriaGasto', ID:id });
+    if (res.success) {
+      State.categoriasGastos = State.categoriasGastos.filter(x=>x.ID!==id);
+      showToast('Categoría eliminada','success');
+      renderPage();
+    } else showToast(res.error||'Error','error');
+  } catch { showToast('Error de conexión','error'); }
+}
+
+onPageReady();
+</script>
+</body>
+</html>

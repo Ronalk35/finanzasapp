@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gastos – FinanzasApp</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<div class="app-layout" id="app-wrapper"></div>
+
+<!-- MODAL GASTO -->
+<div class="modal-overlay" id="modalGasto">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalGastoTitle">Nuevo gasto</h3>
+      <button class="modal-close" onclick="closeModal('modalGasto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="gastoId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input type="date" id="gastoFecha" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto (S/) *</label>
+          <input type="number" id="gastoMonto" class="form-control" placeholder="0.00" step="0.01" min="0" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Categoría *</label>
+          <select id="gastoCategoria" class="form-control" onchange="onCategoriaChange()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Subcategoría *</label>
+          <select id="gastoSubcategoria" class="form-control"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <input type="text" id="gastoDesc" class="form-control" placeholder="Ej: Compra semanal..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalGasto')">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarGasto" onclick="guardarGasto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+initTheme();
+injectLayout('gastos', 'Gastos');
+if (!requireAuth()) throw new Error('no auth');
+
+let editingId = null;
+
+async function onPageReady() {
+  document.getElementById('pageContent').innerHTML =
+    `<div class="page-loading"><div class="loading-spinner"></div> Cargando datos...</div>`;
+  await Promise.all([loadCategorias(), cargarGastos()]);
+  renderPage();
+}
+
+function renderPage() {
+  const content = document.getElementById('pageContent');
+  content.innerHTML = `
+    <div class="kpi-grid section-gap" id="kpiGastos"></div>
+
+    <div class="filter-bar section-gap">
+      <div class="filter-group">
+        <span class="filter-label">Año</span>
+        <select class="filter-select" id="filtroAnio" onchange="renderTabla()">
+          ${getYearOptions()}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Mes</span>
+        <select class="filter-select" id="filtroMes" onchange="renderTabla()">
+          <option value="">Todos</option>
+          ${MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Categoría</span>
+        <select class="filter-select" id="filtroCateg" onchange="renderTabla()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Nuevo gasto</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Registro de gastos</div>
+          <div class="card-subtitle" id="subtitleGastos"></div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Categoría</th>
+              <th>Subcategoría</th>
+              <th>Descripción</th>
+              <th>Monto</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaGastos"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  renderKPIs();
+  renderTabla();
+  populateFiltroCat();
+}
+
+function getYearOptions() {
+  const cy = getCurrentYear();
+  return [cy-1, cy, cy+1].map(y => `<option value="${y}"${y===cy?' selected':''}>${y}</option>`).join('');
+}
+
+async function cargarGastos() {
+  const res = await apiCall({ action: 'getGastos', userId: State.user.id });
+  if (res.success) State.gastos = normalizeRows(res.data);
+}
+
+function filteredGastos() {
+  const anio  = document.getElementById('filtroAnio')?.value;
+  const mes   = document.getElementById('filtroMes')?.value;
+  const categ = document.getElementById('filtroCateg')?.value;
+  return State.gastos.filter(r => {
+    if (anio  && String(r.Anio) !== anio)  return false;
+    if (mes   && String(r.Mes)  !== mes)   return false;
+    if (categ && r.Categoria    !== categ) return false;
+    return true;
+  });
+}
+
+function renderKPIs() {
+  const cy = getCurrentYear();
+  const cm = getCurrentMonth();
+  const total   = State.gastos.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const anual   = State.gastos.filter(r=>String(r.Anio)===String(cy)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const mensual = State.gastos.filter(r=>String(r.Anio)===String(cy)&&String(r.Mes)===String(cm)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+
+  document.getElementById('kpiGastos').innerHTML = `
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-icon">🛒</div>
+      <div class="kpi-label">Este mes</div>
+      <div class="kpi-value">${formatMoney(mensual)}</div>
+      <div class="kpi-sub">${getMonthName(cm)} ${cy}</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">Acumulado ${cy}</div>
+      <div class="kpi-value">${formatMoney(anual)}</div>
+      <div class="kpi-sub">Año en curso</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-label">Total general</div>
+      <div class="kpi-value">${formatMoney(total)}</div>
+      <div class="kpi-sub">${State.gastos.length} registros</div>
+    </div>
+  `;
+}
+
+function renderTabla() {
+  const rows = filteredGastos().sort((a,b)=>(b.Fecha||'').localeCompare(a.Fecha||''));
+  const tbody = document.getElementById('tablaGastos');
+  const sub = document.getElementById('subtitleGastos');
+  if (!tbody) return;
+  const total = rows.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  if (sub) sub.textContent = `${rows.length} registros · Total: ${formatMoney(total)}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-title">Sin gastos registrados</div><div class="empty-state-desc">Haz clic en "Nuevo gasto" para comenzar.</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${formatDate(r.Fecha)}</td>
+      <td><span class="badge badge-red">${r.Categoria||'—'}</span></td>
+      <td><span class="badge badge-gray">${r.Subcategoria||'—'}</span></td>
+      <td>${r.Descripcion||'—'}</td>
+      <td class="amount negative">${formatMoney(r.Monto)}</td>
+      <td>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="editarGasto('${r.ID}')">✏️</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="eliminarGasto('${r.ID}')">🗑️</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function populateFiltroCat() {
+  const sel = document.getElementById('filtroCateg');
+  const cats = [...new Set(State.gastos.map(r=>r.Categoria).filter(Boolean))].sort();
+  cats.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
+}
+
+function abrirModalNuevo() {
+  editingId = null;
+  document.getElementById('modalGastoTitle').textContent = 'Nuevo gasto';
+  document.getElementById('gastoId').value = '';
+  document.getElementById('gastoFecha').value = todayPeru();
+  document.getElementById('gastoMonto').value = '';
+  document.getElementById('gastoDesc').value = '';
+  populateCatSelect();
+  openModal('modalGasto');
+}
+
+function editarGasto(id) {
+  const r = State.gastos.find(x=>x.ID===id);
+  if (!r) return;
+  editingId = id;
+  document.getElementById('modalGastoTitle').textContent = 'Editar gasto';
+  document.getElementById('gastoId').value = id;
+  document.getElementById('gastoFecha').value = normalizeDateStr(r.Fecha);
+  document.getElementById('gastoMonto').value = r.Monto;
+  document.getElementById('gastoDesc').value = r.Descripcion||'';
+  populateCatSelect(r.Categoria, r.Subcategoria);
+  openModal('modalGasto');
+}
+
+function populateCatSelect(selCat='', selSub='') {
+  const catSel = document.getElementById('gastoCategoria');
+  catSel.innerHTML = State.categoriasGastos.map(c =>
+    `<option value="${c.Nombre}"${c.Nombre===selCat?' selected':''}>${c.Nombre}</option>`
+  ).join('');
+  populateSubSelect(selSub);
+}
+
+function onCategoriaChange() {
+  populateSubSelect();
+}
+
+function populateSubSelect(selSub='') {
+  const catSel = document.getElementById('gastoCategoria');
+  const subSel = document.getElementById('gastoSubcategoria');
+  const cat = State.categoriasGastos.find(c=>c.Nombre===catSel.value);
+  const subs = cat ? (cat.Subcategorias||'').split('|').filter(Boolean) : [];
+  subSel.innerHTML = subs.map(s=>
+    `<option value="${s}"${s===selSub?' selected':''}>${s}</option>`
+  ).join('');
+}
+
+async function guardarGasto() {
+  const fecha = document.getElementById('gastoFecha').value;
+  const monto = document.getElementById('gastoMonto').value;
+  const categ = document.getElementById('gastoCategoria').value;
+  const sub   = document.getElementById('gastoSubcategoria').value;
+  const desc  = document.getElementById('gastoDesc').value.trim();
+
+  if (!fecha||!monto||!categ) return showToast('Completa los campos obligatorios','error');
+  if (parseFloat(monto)<=0) return showToast('El monto debe ser mayor a 0','error');
+
+  const btn = document.getElementById('btnGuardarGasto');
+  btn.disabled=true; btn.textContent='Guardando...';
+
+  const fields = dateToFields(fecha);
+  const params = {
+    IDUsuario: State.user.id,
+    ...fields,
+    Categoria: categ,
+    Subcategoria: sub,
+    Descripcion: desc,
+    Monto: parseFloat(monto).toFixed(2),
+  };
+
+  try {
+    let res;
+    if (editingId) {
+      res = await apiCall({ action:'updateGasto', ID:editingId, ...params });
+      if (res.success) {
+        const idx = State.gastos.findIndex(x=>x.ID===editingId);
+        if (idx>=0) State.gastos[idx] = { ID:editingId, ...params };
+        showToast('Gasto actualizado','success');
+      }
+    } else {
+      res = await apiCall({ action:'addGasto', ...params });
+      if (res.success) { State.gastos.push(res.data); showToast('Gasto registrado','success'); }
+    }
+    if (res.success) { closeModal('modalGasto'); renderKPIs(); renderTabla(); }
+    else showToast(res.error||'Error al guardar','error');
+  } catch { showToast('Error de conexión','error'); }
+  finally { btn.disabled=false; btn.textContent='Guardar'; }
+}
+
+async function eliminarGasto(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  try {
+    const res = await apiCall({ action:'deleteGasto', ID:id });
+    if (res.success) {
+      State.gastos = State.gastos.filter(x=>x.ID!==id);
+      renderKPIs(); renderTabla();
+      showToast('Gasto eliminado','success');
+    } else showToast(res.error||'Error','error');
+  } catch { showToast('Error de conexión','error'); }
+}
+
+onPageReady();
+</script>
+</body>
+</html>

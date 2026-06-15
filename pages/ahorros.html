@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ahorros – FinanzasApp</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+<div class="app-layout" id="app-wrapper"></div>
+
+<!-- MODAL AHORRO -->
+<div class="modal-overlay" id="modalAhorro">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalAhorroTitle">Nuevo ahorro</h3>
+      <button class="modal-close" onclick="closeModal('modalAhorro')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ahorroId" />
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input type="date" id="ahorroFecha" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto (S/) *</label>
+          <input type="number" id="ahorroMonto" class="form-control" placeholder="0.00" step="0.01" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Objetivo *</label>
+        <select id="ahorroObjetivo" class="form-control">
+          <option>Fondo de emergencia</option>
+          <option>Vacaciones</option>
+          <option>Educación</option>
+          <option>Compra de bienes</option>
+          <option>Inversiones</option>
+          <option>Otros</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <input type="text" id="ahorroDesc" class="form-control" placeholder="Ej: Depósito mensual..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAhorro')">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarAhorro" onclick="guardarAhorro()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+initTheme();
+injectLayout('ahorros', 'Ahorros');
+if (!requireAuth()) throw new Error('no auth');
+
+let editingId = null;
+
+async function onPageReady() {
+  document.getElementById('pageContent').innerHTML =
+    `<div class="page-loading"><div class="loading-spinner"></div> Cargando datos...</div>`;
+  await Promise.all([cargarAhorros(), loadAllData()]);
+  renderPage();
+}
+
+async function cargarAhorros() {
+  const res = await apiCall({ action:'getAhorros', userId:State.user.id });
+  if (res.success) State.ahorros = normalizeRows(res.data);
+}
+
+function renderPage() {
+  const content = document.getElementById('pageContent');
+  content.innerHTML = `
+    <div class="kpi-grid section-gap" id="kpiAhorros"></div>
+
+    <div class="filter-bar section-gap">
+      <div class="filter-group">
+        <span class="filter-label">Año</span>
+        <select class="filter-select" id="filtroAnio" onchange="renderTabla()">
+          ${getYearOptions()}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Mes</span>
+        <select class="filter-select" id="filtroMes" onchange="renderTabla()">
+          <option value="">Todos</option>
+          ${MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Objetivo</span>
+        <select class="filter-select" id="filtroObj" onchange="renderTabla()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Registrar ahorro</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Registro de ahorros</div>
+          <div class="card-subtitle" id="subtitleAhorros"></div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Objetivo</th>
+              <th>Descripción</th>
+              <th>Monto</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaAhorros"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  renderKPIs();
+  renderTabla();
+  populateFiltroObj();
+}
+
+function getYearOptions() {
+  const cy = getCurrentYear();
+  return [cy-1,cy,cy+1].map(y=>`<option value="${y}"${y===cy?' selected':''}>${y}</option>`).join('');
+}
+
+function filteredAhorros() {
+  const anio = document.getElementById('filtroAnio')?.value;
+  const mes  = document.getElementById('filtroMes')?.value;
+  const obj  = document.getElementById('filtroObj')?.value;
+  return State.ahorros.filter(r=>{
+    if (anio && String(r.Anio)!==anio) return false;
+    if (mes  && String(r.Mes) !==mes)  return false;
+    if (obj  && r.Objetivo    !==obj)  return false;
+    return true;
+  });
+}
+
+function renderKPIs() {
+  const cy = getCurrentYear();
+  const cm = getCurrentMonth();
+  const totalAhorros = State.ahorros.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const anual   = State.ahorros.filter(r=>String(r.Anio)===String(cy)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const mensual = State.ahorros.filter(r=>String(r.Anio)===String(cy)&&String(r.Mes)===String(cm)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+
+  // Ingresos del año para % ahorro
+  const ingresosAnio = State.ingresos.filter(r=>String(r.Anio)===String(cy)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const pct = ingresosAnio > 0 ? ((anual/ingresosAnio)*100).toFixed(1) : '—';
+
+  document.getElementById('kpiAhorros').innerHTML = `
+    <div class="kpi-card kpi-saving">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Este mes</div>
+      <div class="kpi-value">${formatMoney(mensual)}</div>
+      <div class="kpi-sub">${getMonthName(cm)} ${cy}</div>
+    </div>
+    <div class="kpi-card kpi-saving">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">Ahorro ${cy}</div>
+      <div class="kpi-value">${formatMoney(anual)}</div>
+      <div class="kpi-sub">Año en curso</div>
+    </div>
+    <div class="kpi-card kpi-saving">
+      <div class="kpi-icon">🏆</div>
+      <div class="kpi-label">Total ahorrado</div>
+      <div class="kpi-value">${formatMoney(totalAhorros)}</div>
+      <div class="kpi-sub">${State.ahorros.length} registros</div>
+    </div>
+    <div class="kpi-card kpi-saving">
+      <div class="kpi-icon">📈</div>
+      <div class="kpi-label">% Ahorro (vs ingresos ${cy})</div>
+      <div class="kpi-value">${pct}%</div>
+      <div class="kpi-sub">Tasa de ahorro anual</div>
+    </div>
+  `;
+}
+
+function renderTabla() {
+  const rows = filteredAhorros().sort((a,b)=>(b.Fecha||'').localeCompare(a.Fecha||''));
+  const tbody = document.getElementById('tablaAhorros');
+  const sub = document.getElementById('subtitleAhorros');
+  if (!tbody) return;
+  const total = rows.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  if (sub) sub.textContent = `${rows.length} registros · Total: ${formatMoney(total)}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">🏦</div><div class="empty-state-title">Sin ahorros registrados</div><div class="empty-state-desc">Haz clic en "Registrar ahorro" para comenzar.</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${formatDate(r.Fecha)}</td>
+      <td><span class="badge badge-yellow">${r.Objetivo||'—'}</span></td>
+      <td>${r.Descripcion||'—'}</td>
+      <td class="amount" style="color:var(--brand-accent)">${formatMoney(r.Monto)}</td>
+      <td>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="editarAhorro('${r.ID}')">✏️</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="eliminarAhorro('${r.ID}')">🗑️</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function populateFiltroObj() {
+  const sel = document.getElementById('filtroObj');
+  const objs = [...new Set(State.ahorros.map(r=>r.Objetivo).filter(Boolean))].sort();
+  objs.forEach(o=>{ const opt=document.createElement('option'); opt.value=o; opt.textContent=o; sel.appendChild(opt); });
+}
+
+function abrirModalNuevo() {
+  editingId = null;
+  document.getElementById('modalAhorroTitle').textContent = 'Nuevo ahorro';
+  document.getElementById('ahorroId').value='';
+  document.getElementById('ahorroFecha').value=todayPeru();
+  document.getElementById('ahorroMonto').value='';
+  document.getElementById('ahorroDesc').value='';
+  document.getElementById('ahorroObjetivo').value='Fondo de emergencia';
+  openModal('modalAhorro');
+}
+
+function editarAhorro(id) {
+  const r=State.ahorros.find(x=>x.ID===id);
+  if (!r) return;
+  editingId=id;
+  document.getElementById('modalAhorroTitle').textContent='Editar ahorro';
+  document.getElementById('ahorroId').value=id;
+  document.getElementById('ahorroFecha').value=normalizeDateStr(r.Fecha);
+  document.getElementById('ahorroMonto').value=r.Monto;
+  document.getElementById('ahorroDesc').value=r.Descripcion||'';
+  document.getElementById('ahorroObjetivo').value=r.Objetivo||'Otros';
+  openModal('modalAhorro');
+}
+
+async function guardarAhorro() {
+  const fecha = document.getElementById('ahorroFecha').value;
+  const monto = document.getElementById('ahorroMonto').value;
+  const obj   = document.getElementById('ahorroObjetivo').value;
+  const desc  = document.getElementById('ahorroDesc').value.trim();
+
+  if (!fecha||!monto) return showToast('Completa los campos obligatorios','error');
+  if (parseFloat(monto)<=0) return showToast('El monto debe ser mayor a 0','error');
+
+  const btn=document.getElementById('btnGuardarAhorro');
+  btn.disabled=true; btn.textContent='Guardando...';
+
+  const fields = dateToFields(fecha);
+  const params = { IDUsuario:State.user.id, ...fields, Objetivo:obj, Descripcion:desc, Monto:parseFloat(monto).toFixed(2) };
+
+  try {
+    let res;
+    if (editingId) {
+      res = await apiCall({ action:'updateAhorro', ID:editingId, ...params });
+      if (res.success) { const idx=State.ahorros.findIndex(x=>x.ID===editingId); if(idx>=0) State.ahorros[idx]={ID:editingId,...params}; showToast('Ahorro actualizado','success'); }
+    } else {
+      res = await apiCall({ action:'addAhorro', ...params });
+      if (res.success) { State.ahorros.push(res.data); showToast('Ahorro registrado','success'); }
+    }
+    if (res.success) { closeModal('modalAhorro'); renderKPIs(); renderTabla(); }
+    else showToast(res.error||'Error al guardar','error');
+  } catch { showToast('Error de conexión','error'); }
+  finally { btn.disabled=false; btn.textContent='Guardar'; }
+}
+
+async function eliminarAhorro(id) {
+  if (!confirm('¿Eliminar este ahorro?')) return;
+  try {
+    const res=await apiCall({ action:'deleteAhorro', ID:id });
+    if (res.success) { State.ahorros=State.ahorros.filter(x=>x.ID!==id); renderKPIs(); renderTabla(); showToast('Ahorro eliminado','success'); }
+    else showToast(res.error||'Error','error');
+  } catch { showToast('Error de conexión','error'); }
+}
+
+onPageReady();
+</script>
+</body>
+</html>

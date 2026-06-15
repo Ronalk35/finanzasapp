@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard – FinanzasApp</title>
+  <link rel="icon" href="assets/img/favicon.ico" type="image/x-icon" />
+  <!-- Favicon/Icons for different devices -->
+	<link rel="icon" type="image/png" sizes="192x192" href="/assets/img/favicon.png">
+	<link rel="apple-touch-icon" sizes="192x192" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="../css/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+    .chart-full  { grid-column: 1 / -1; }
+    .chart-box   { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; box-shadow: var(--shadow-sm); }
+    .chart-title { font-size: 15px; font-weight: 700; margin-bottom: 18px; color: var(--text-primary); }
+    .chart-canvas-wrap { position: relative; height: 280px; }
+    .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .analysis-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; }
+    .analysis-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+    .analysis-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+    .analysis-sub   { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } .chart-full { grid-column: 1; } }
+  </style>
+</head>
+<body>
+<div class="app-layout" id="app-wrapper"></div>
+
+<script src="../js/app.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+initTheme();
+injectLayout('dashboard', 'Dashboard Financiero');
+if (!requireAuth()) throw new Error('no auth');
+
+const charts = {};
+
+async function onPageReady() {
+  document.getElementById('pageContent').innerHTML = `<div class="page-loading"><div class="loading-spinner"></div> Cargando datos...</div>`;
+  await loadAllData();
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const cy = getCurrentYear();
+  const content = document.getElementById('pageContent');
+
+  const years = [...new Set([
+    ...State.ingresos.map(r=>r.Anio),
+    ...State.gastos.map(r=>r.Anio),
+    ...State.ahorros.map(r=>r.Anio),
+  ])].filter(Boolean).sort((a,b)=>b-a);
+
+  const yearOpts = years.length
+    ? years.map(y=>`<option value="${y}"${String(y)===String(cy)?' selected':''}>${y}</option>`).join('')
+    : `<option value="${cy}" selected>${cy}</option>`;
+
+  content.innerHTML = `
+    <!-- Filtros -->
+    <div class="filter-bar section-gap">
+      <div class="filter-group">
+        <span class="filter-label">Año</span>
+        <select class="filter-select" id="dashAnio" onchange="refreshDashboard()">${yearOpts}</select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Mes</span>
+        <select class="filter-select" id="dashMes" onchange="refreshDashboard()">
+          <option value="">Todo el año</option>
+          ${MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <!-- KPIs principales -->
+    <div class="kpi-grid section-gap" id="dashKpis"></div>
+
+    <!-- Análisis histórico -->
+    <div class="analysis-grid section-gap" id="dashAnalysis"></div>
+
+    <!-- Gráficos -->
+    <div class="charts-grid">
+      <div class="chart-box chart-full">
+        <div class="chart-title">📈 Evolución mensual — Ingresos vs Gastos vs Ahorros</div>
+        <div class="chart-canvas-wrap"><canvas id="chartEvolucion"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">🛒 Top 6 categorías con mayor gasto</div>
+        <div class="chart-canvas-wrap"><canvas id="chartCatGastos"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">🗂️ Top 10 subcategorías con mayor gasto</div>
+        <div class="chart-canvas-wrap"><canvas id="chartSubGastos"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">⚖️ Distribución financiera</div>
+        <div class="chart-canvas-wrap"><canvas id="chartDistribucion"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">💵 Ingresos por categoría</div>
+        <div class="chart-canvas-wrap"><canvas id="chartCatIngresos"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  refreshDashboard();
+}
+
+function getFiltered() {
+  const anio = document.getElementById('dashAnio')?.value;
+  const mes  = document.getElementById('dashMes')?.value;
+
+  const filt = arr => arr.filter(r => {
+    if (anio && String(r.Anio) !== String(anio)) return false;
+    if (mes  && String(r.Mes)  !== String(mes))  return false;
+    return true;
+  });
+
+  return {
+    ingresos: filt(State.ingresos),
+    gastos:   filt(State.gastos),
+    ahorros:  filt(State.ahorros),
+  };
+}
+
+function refreshDashboard() {
+  const { ingresos, gastos, ahorros } = getFiltered();
+  const totalIng = ingresos.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const totalGas = gastos.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const totalAho = ahorros.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const balance  = totalIng - totalGas - totalAho;
+  const pctAho   = totalIng > 0 ? ((totalAho/totalIng)*100).toFixed(1) : 0;
+
+  // KPIs
+  document.getElementById('dashKpis').innerHTML = `
+    <div class="kpi-card kpi-income">
+      <div class="kpi-icon">💵</div>
+      <div class="kpi-label">Total ingresos</div>
+      <div class="kpi-value">${formatMoney(totalIng)}</div>
+      <div class="kpi-sub">${ingresos.length} registros</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-icon">🛒</div>
+      <div class="kpi-label">Total gastos</div>
+      <div class="kpi-value">${formatMoney(totalGas)}</div>
+      <div class="kpi-sub">${gastos.length} registros</div>
+    </div>
+    <div class="kpi-card kpi-saving">
+      <div class="kpi-icon">🏦</div>
+      <div class="kpi-label">Total ahorros</div>
+      <div class="kpi-value">${formatMoney(totalAho)}</div>
+      <div class="kpi-sub">${pctAho}% de ingresos</div>
+    </div>
+    <div class="kpi-card kpi-balance">
+      <div class="kpi-icon">⚖️</div>
+      <div class="kpi-label">Balance disponible</div>
+      <div class="kpi-value" style="color:${balance>=0?'var(--success)':'var(--danger)'}">${formatMoney(balance)}</div>
+      <div class="kpi-sub">${balance>=0?'Superávit':'Déficit'}</div>
+    </div>
+  `;
+
+  renderAnalysis();
+  renderCharts(ingresos, gastos, ahorros);
+}
+
+function renderAnalysis() {
+  // Análisis sobre TODOS los datos (no filtrados)
+  const groupBy = (arr, key) => arr.reduce((acc, r) => {
+    const k = r[key]; acc[k] = (acc[k]||0) + parseFloat(r.Monto||0); return acc;
+  }, {});
+
+  const gastosPorMes = groupBy(State.gastos, 'Mes');
+  const gastosPorAnio = groupBy(State.gastos, 'Anio');
+  const ingresosPorMes = groupBy(State.ingresos, 'Mes');
+  const ingresosPorAnio = groupBy(State.ingresos, 'Anio');
+
+  const maxGastoMes  = Object.entries(gastosPorMes).sort((a,b)=>b[1]-a[1])[0];
+  const maxGastoAnio = Object.entries(gastosPorAnio).sort((a,b)=>b[1]-a[1])[0];
+  const maxIngMes    = Object.entries(ingresosPorMes).sort((a,b)=>b[1]-a[1])[0];
+  const maxIngAnio   = Object.entries(ingresosPorAnio).sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById('dashAnalysis').innerHTML = `
+    <div class="analysis-card">
+      <div class="analysis-label">📉 Mes con más gastos</div>
+      <div class="analysis-value">${maxGastoMes ? getMonthName(maxGastoMes[0]) : '—'}</div>
+      <div class="analysis-sub">${maxGastoMes ? formatMoney(maxGastoMes[1]) : 'Sin datos'}</div>
+    </div>
+    <div class="analysis-card">
+      <div class="analysis-label">📉 Año con más gastos</div>
+      <div class="analysis-value">${maxGastoAnio ? maxGastoAnio[0] : '—'}</div>
+      <div class="analysis-sub">${maxGastoAnio ? formatMoney(maxGastoAnio[1]) : 'Sin datos'}</div>
+    </div>
+    <div class="analysis-card">
+      <div class="analysis-label">📈 Mes con más ingresos</div>
+      <div class="analysis-value">${maxIngMes ? getMonthName(maxIngMes[0]) : '—'}</div>
+      <div class="analysis-sub">${maxIngMes ? formatMoney(maxIngMes[1]) : 'Sin datos'}</div>
+    </div>
+    <div class="analysis-card">
+      <div class="analysis-label">📈 Año con más ingresos</div>
+      <div class="analysis-value">${maxIngAnio ? maxIngAnio[0] : '—'}</div>
+      <div class="analysis-sub">${maxIngAnio ? formatMoney(maxIngAnio[1]) : 'Sin datos'}</div>
+    </div>
+  `;
+}
+
+function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+
+function chartDefaults() {
+  return {
+    color: isDark() ? '#94A3B8' : '#475569',
+    gridColor: isDark() ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)',
+    tickColor: isDark() ? '#64748B' : '#94A3B8',
+  };
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function renderCharts(ingresos, gastos, ahorros) {
+  const d = chartDefaults();
+  const PALETTE = ['#1D4ED8','#84CC16','#EF4444','#F59E0B','#8B5CF6','#06B6D4','#EC4899','#10B981','#F97316','#6366F1'];
+
+  // ── 1. Evolución mensual ──────────────────────────────────
+  destroyChart('chartEvolucion');
+  const meses = MONTHS.map((m,i) => i+1);
+  const sumByMes = (arr, mes) => arr.filter(r=>String(r.Mes)===String(mes)).reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+
+  charts.chartEvolucion = new Chart(document.getElementById('chartEvolucion'), {
+    type: 'bar',
+    data: {
+      labels: MONTHS.map(m=>m.slice(0,3)),
+      datasets: [
+        { label:'Ingresos', data: meses.map(m=>sumByMes(ingresos,m)), backgroundColor:'rgba(34,197,94,.7)', borderRadius:4 },
+        { label:'Gastos',   data: meses.map(m=>sumByMes(gastos,m)),   backgroundColor:'rgba(239,68,68,.7)',  borderRadius:4 },
+        { label:'Ahorros',  data: meses.map(m=>sumByMes(ahorros,m)),  backgroundColor:'rgba(132,204,22,.7)', borderRadius:4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: d.color } } },
+      scales: {
+        x: { ticks: { color: d.tickColor }, grid: { color: d.gridColor } },
+        y: { ticks: { color: d.tickColor, callback: v => 'S/ '+v.toLocaleString() }, grid: { color: d.gridColor } }
+      }
+    }
+  });
+
+  // ── 2. Top 6 categorías gastos ───────────────────────────
+  destroyChart('chartCatGastos');
+  const catGastos = Object.entries(
+    gastos.reduce((acc,r)=>{ acc[r.Categoria]=(acc[r.Categoria]||0)+parseFloat(r.Monto||0); return acc; },{})
+  ).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  charts.chartCatGastos = new Chart(document.getElementById('chartCatGastos'), {
+    type: 'doughnut',
+    data: {
+      labels: catGastos.map(x=>x[0]),
+      datasets: [{ data: catGastos.map(x=>x[1]), backgroundColor: PALETTE, borderWidth:2, borderColor: isDark()? '#111827':'#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'right', labels:{ color:d.color, boxWidth:12 } },
+        tooltip: { callbacks: { label: ctx => ` S/ ${ctx.raw.toLocaleString('es-PE',{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+
+  // ── 3. Top 10 subcategorías gastos ──────────────────────
+  destroyChart('chartSubGastos');
+  const subGastos = Object.entries(
+    gastos.reduce((acc,r)=>{ const k=r.Subcategoria||'Sin sub'; acc[k]=(acc[k]||0)+parseFloat(r.Monto||0); return acc; },{})
+  ).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  charts.chartSubGastos = new Chart(document.getElementById('chartSubGastos'), {
+    type: 'bar',
+    data: {
+      labels: subGastos.map(x=>x[0]),
+      datasets: [{ label:'Monto', data: subGastos.map(x=>x[1]), backgroundColor: PALETTE, borderRadius:4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend:{ display:false } },
+      scales: {
+        x: { ticks:{ color:d.tickColor, callback:v=>'S/'+v.toLocaleString() }, grid:{ color:d.gridColor } },
+        y: { ticks:{ color:d.tickColor } , grid:{ display:false } }
+      }
+    }
+  });
+
+  // ── 4. Distribución financiera ───────────────────────────
+  destroyChart('chartDistribucion');
+  const totalIng = ingresos.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const totalGas = gastos.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const totalAho = ahorros.reduce((s,r)=>s+parseFloat(r.Monto||0),0);
+  const libre = Math.max(0, totalIng - totalGas - totalAho);
+
+  charts.chartDistribucion = new Chart(document.getElementById('chartDistribucion'), {
+    type: 'pie',
+    data: {
+      labels: ['Gastos','Ahorros','Disponible'],
+      datasets: [{ data:[totalGas,totalAho,libre], backgroundColor:['#EF4444','#84CC16','#1D4ED8'], borderWidth:2, borderColor: isDark()?'#111827':'#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'bottom', labels:{ color:d.color } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: S/ ${ctx.raw.toLocaleString('es-PE',{minimumFractionDigits:2})} (${totalIng>0?((ctx.raw/totalIng*100).toFixed(1)):0}%)` } }
+      }
+    }
+  });
+
+  // ── 5. Ingresos por categoría ────────────────────────────
+  destroyChart('chartCatIngresos');
+  const catIngresos = Object.entries(
+    ingresos.reduce((acc,r)=>{ acc[r.Categoria]=(acc[r.Categoria]||0)+parseFloat(r.Monto||0); return acc; },{})
+  ).sort((a,b)=>b[1]-a[1]);
+
+  charts.chartCatIngresos = new Chart(document.getElementById('chartCatIngresos'), {
+    type: 'doughnut',
+    data: {
+      labels: catIngresos.map(x=>x[0]),
+      datasets: [{ data: catIngresos.map(x=>x[1]), backgroundColor: PALETTE.slice(0,catIngresos.length), borderWidth:2, borderColor:isDark()?'#111827':'#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend:{ position:'right', labels:{ color:d.color, boxWidth:12 } },
+        tooltip:{ callbacks:{ label:ctx=>` S/ ${ctx.raw.toLocaleString('es-PE',{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+}
+
+// Re-render charts on theme change
+const origSetTheme = setTheme;
+window.setTheme = function(theme) {
+  origSetTheme(theme);
+  const { ingresos, gastos, ahorros } = getFiltered();
+  if (ingresos || gastos) setTimeout(()=>renderCharts(ingresos,gastos,ahorros), 100);
+};
+
+onPageReady();
+</script>
+</body>
+</html>
