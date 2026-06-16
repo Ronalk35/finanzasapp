@@ -52,7 +52,7 @@ function initAuth() {
   if (saved) {
     try {
       State.user = JSON.parse(saved);
-      if (window.location.pathname.endsWith('./index.html') || window.location.pathname === '/') {
+      if (window.location.pathname.endsWith('/finanzasapp/index.html') || window.location.pathname === '/') {
         window.location.href = 'pages/dashboard.html';
       } else {
         onUserLoaded();
@@ -61,8 +61,8 @@ function initAuth() {
       localStorage.removeItem('session');
     }
   } else {
-    if (!window.location.pathname.endsWith('./index.html') && window.location.pathname !== '/') {
-      window.location.href = './index.html';
+    if (!window.location.pathname.endsWith('/finanzasapp/index.html') && window.location.pathname !== '/') {
+      window.location.href = '/finanzasapp/index.html';
     }
   }
 }
@@ -75,13 +75,13 @@ function saveSession(user) {
 function logout() {
   localStorage.removeItem('session');
   State.user = null;
-  window.location.href = './index.html';
+  window.location.href = '/finanzasapp/index.html';
 }
 
 function requireAuth() {
   const saved = localStorage.getItem('session');
   if (!saved) {
-    window.location.href = './index.html';
+    window.location.href = '/finanzasapp/index.html';
     return false;
   }
   State.user = JSON.parse(saved);
