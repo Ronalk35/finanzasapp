@@ -93,7 +93,7 @@ function injectLayout(activePage, pageTitle) {
 function confirmLogout() {
   if (confirm('¿Cerrar sesión?')) {
     localStorage.removeItem('session');
-    window.location.href = '../index.html';
+    window.location.href = './index.html';
   }
 }
 
