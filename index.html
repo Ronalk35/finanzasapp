@@ -5,24 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="img/favicon.ico" type="image/x-icon"/>
   <title>Ingresar – ValoraGo</title>
-  <!--Favicon for this site -->
-	
   <link rel="stylesheet" href="css/styles.css" />
   <style>
     body { overflow: hidden; }
     @media (max-width: 900px) { body { overflow: auto; } }
   </style>
 </head>
-
 <body>
 
 <div class="login-page" id="loginPage">
 
-  <!-- Panel decorativo izquierdo -->
+  <!-- Panel izquierdo -->
   <div class="login-art">
+    <div class="login-art-bg"></div>
     <div class="login-art-content">
-      <h1>Tu dinero,<br /><span>bajo control.</span></h1>
-      <p>Registra ingresos, controla gastos, ahorra con propósito y visualiza tu salud financiera en tiempo real.</p>
+
+      <div class="login-badge"><span>✦</span> Finanzas personales inteligentes</div>
+
+      <div class="login-art-logo">
+        <div class="login-art-logo-icon">💚</div>
+        <div class="login-art-logo-name">Valora<em>Go</em></div>
+      </div>
+
+      <h1>Gestiona, ahorra<br/><span>y progresa.</span></h1>
+      <p>Toma el control de tu dinero con una plataforma simple, segura y diseñada para que cada sol cuente.</p>
+
+      <div class="login-features">
+        <div class="login-feature-card">
+          <div class="login-feature-icon">📊</div>
+          <div class="login-feature-title">Dashboard visual</div>
+          <div class="login-feature-desc">Gráficos interactivos de tus finanzas</div>
+        </div>
+        <div class="login-feature-card">
+          <div class="login-feature-icon">🔒</div>
+          <div class="login-feature-title">100% privado</div>
+          <div class="login-feature-desc">Tus datos solo los ves tú</div>
+        </div>
+        <div class="login-feature-card">
+          <div class="login-feature-icon">📱</div>
+          <div class="login-feature-title">Multiplataforma</div>
+          <div class="login-feature-desc">Funciona en móvil, tablet y PC</div>
+        </div>
+        <div class="login-feature-card">
+          <div class="login-feature-icon">⚡</div>
+          <div class="login-feature-title">Sin costo</div>
+          <div class="login-feature-desc">Gratis para siempre</div>
+        </div>
+      </div>
+
       <div class="login-stats">
         <div class="login-stat">
           <div class="login-stat-val">100%</div>
@@ -37,6 +67,8 @@
           <div class="login-stat-lbl">Costo</div>
         </div>
       </div>
+
+      <p class="login-slogan"><strong>ValoraGo</strong> — Cada gasto cuenta.</p>
     </div>
   </div>
 
@@ -44,7 +76,7 @@
   <div class="login-form-area">
     <div class="login-box">
       <div class="login-logo">
-        <div class="login-logo-icon">💰</div>
+        <div class="login-logo-icon">💚</div>
         <span class="login-logo-text">ValoraGo</span>
         <button class="theme-toggle" onclick="toggleTheme()" style="margin-left:auto" title="Tema oscuro">🌙</button>
       </div>
@@ -58,7 +90,6 @@
       <div id="formLogin">
         <h2 class="login-heading">Bienvenido de nuevo</h2>
         <p class="login-sub">Ingresa tus credenciales para continuar</p>
-
         <div class="form-group">
           <label class="form-label">Correo electrónico</label>
           <input type="email" id="loginEmail" class="form-control" placeholder="correo@ejemplo.com" />
@@ -69,11 +100,12 @@
         </div>
         <div id="loginError" class="form-error hidden"></div>
         <button class="btn btn-primary w-full mt-3" id="btnLogin" onclick="handleLogin()">
-          <span>Ingresar </span>
+          <span>Ingresar</span>
         </button>
         <p class="login-footer mt-4">
           ¿No tienes cuenta?
-          <a href="#" onclick="showTab('register');return false" style="color:var(--brand-primary);font-weight:600;">Regístrate gratis</a>
+          <a href="#" onclick="showTab('register');return false"
+            style="color:var(--brand-primary);font-weight:600;">Regístrate gratis</a>
         </p>
       </div>
 
@@ -81,7 +113,6 @@
       <div id="formRegister" class="hidden">
         <h2 class="login-heading">Crear cuenta</h2>
         <p class="login-sub">Completa los datos para comenzar</p>
-
         <div class="form-group">
           <label class="form-label">Nombre completo</label>
           <input type="text" id="regNombre" class="form-control" placeholder="Ej: Juan Pérez" />
@@ -104,17 +135,16 @@
         </button>
         <p class="login-footer mt-4">
           ¿Ya tienes cuenta?
-          <a href="#" onclick="showTab('login');return false" style="color:var(--brand-primary);font-weight:600;">Inicia sesión</a>
+          <a href="#" onclick="showTab('login');return false"
+            style="color:var(--brand-primary);font-weight:600;">Inicia sesión</a>
         </p>
       </div>
-
     </div>
   </div>
 </div>
 
 <script src="js/app.js"></script>
 <script>
-  // Redirigir si ya hay sesión
   (function() {
     const s = localStorage.getItem('session');
     if (s) window.location.href = 'pages/dashboard.html';
@@ -128,19 +158,16 @@
     document.getElementById('tabReg').classList.toggle('active', tab === 'register');
     clearErrors();
   }
-
   function clearErrors() {
     ['loginError','regError'].forEach(id => {
       const el = document.getElementById(id);
       if (el) { el.textContent = ''; el.classList.add('hidden'); }
     });
   }
-
   function showError(id, msg) {
     const el = document.getElementById(id);
     if (el) { el.textContent = msg; el.classList.remove('hidden'); }
   }
-
   function setLoading(btnId, loading) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -153,15 +180,12 @@
       btn.disabled = false;
     }
   }
-
   async function handleLogin() {
     clearErrors();
-    const correo = document.getElementById('loginEmail').value.trim();
+    const correo   = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPass').value;
-
     if (!correo || !password) return showError('loginError', 'Completa todos los campos');
-    if (!correo.includes('@')) return showError('loginError', 'Correo no válido');
-
+    if (!correo.includes('@'))  return showError('loginError', 'Correo no válido');
     setLoading('btnLogin', true);
     try {
       const res = await apiCall({ action: 'login', correo, password });
@@ -177,19 +201,16 @@
       setLoading('btnLogin', false);
     }
   }
-
   async function handleRegister() {
     clearErrors();
     const nombre   = document.getElementById('regNombre').value.trim();
     const correo   = document.getElementById('regEmail').value.trim();
     const password = document.getElementById('regPass').value;
     const pass2    = document.getElementById('regPass2').value;
-
     if (!nombre || !correo || !password) return showError('regError', 'Completa todos los campos');
-    if (!correo.includes('@')) return showError('regError', 'Correo no válido');
-    if (password.length < 6) return showError('regError', 'La contraseña debe tener al menos 6 caracteres');
-    if (password !== pass2) return showError('regError', 'Las contraseñas no coinciden');
-
+    if (!correo.includes('@'))  return showError('regError', 'Correo no válido');
+    if (password.length < 6)    return showError('regError', 'La contraseña debe tener al menos 6 caracteres');
+    if (password !== pass2)     return showError('regError', 'Las contraseñas no coinciden');
     setLoading('btnReg', true);
     try {
       const res = await apiCall({ action: 'register', nombre, correo, password });
@@ -205,8 +226,6 @@
       setLoading('btnReg', false);
     }
   }
-
-  // Enter key
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       const isLogin = !document.getElementById('formLogin').classList.contains('hidden');
