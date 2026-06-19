@@ -6,7 +6,7 @@
 const CONFIG = {
   // ⚠️ REEMPLAZA esta URL con la URL de tu Google Apps Script desplegado
   API_URL: 'https://script.google.com/macros/s/AKfycbzRTN_licLBriEk-66ToueDxpXn24p7icEmwAXJ1PsH79bFQaEGttYUOWH2tDDvVGq_HQ/exec',
-  APP_NAME: 'FinanzasApp',
+  APP_NAME: 'ValoraGo',
 };
 
 // ─── ESTADO GLOBAL ───────────────────────────────────────────
