@@ -22,7 +22,7 @@ function renderLayout(activePage, pageTitle) {
       <div class="sidebar-brand">
         <div class="brand-logo">
           <div class="brand-icon">💰</div>
-          <span class="brand-name">FinanzasApp</span>
+          <span class="brand-name">ValoraGo</span>
         </div>
         <div class="brand-tagline">Finanzas personales</div>
       </div>
