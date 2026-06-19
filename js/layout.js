@@ -53,7 +53,7 @@ function renderLayout(activePage, pageTitle) {
         </button>
         <div class="sidebar-copyright">
           ©2026 <a href="https://ronalk35.github.io/ronaldurbano.c/" target="_blank" rel="noopener">Ronald U.</a><br/>
-          Todos los derechos reservados
+          - ValoraGo Todos los derechos reservados
         </div>
       </div>
     </aside>
