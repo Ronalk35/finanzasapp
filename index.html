@@ -6,10 +6,6 @@
   <link rel="icon" href="img/favicon.ico" type="image/x-icon"/>
   <title>Ingresar – ValoraGo</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <style>
-    body { overflow: hidden; }
-    @media (max-width: 900px) { body { overflow: auto; } }
-  </style>
 </head>
 <body>
 
@@ -19,17 +15,13 @@
   <div class="login-art">
     <div class="login-art-bg"></div>
     <div class="login-art-content">
-
       <div class="login-badge"><span>✦</span> Finanzas personales inteligentes</div>
-
       <div class="login-art-logo">
         <div class="login-art-logo-icon">💚</div>
         <div class="login-art-logo-name">Valora<em>Go</em></div>
       </div>
-
       <h1>Gestiona, ahorra<br/><span>y progresa.</span></h1>
       <p>Toma el control de tu dinero con una plataforma simple, segura y diseñada para que cada sol cuente.</p>
-
       <div class="login-features">
         <div class="login-feature-card">
           <div class="login-feature-icon">📊</div>
@@ -52,7 +44,6 @@
           <div class="login-feature-desc">Gratis para siempre</div>
         </div>
       </div>
-
       <div class="login-stats">
         <div class="login-stat">
           <div class="login-stat-val">100%</div>
@@ -67,7 +58,6 @@
           <div class="login-stat-lbl">Costo</div>
         </div>
       </div>
-
       <p class="login-slogan"><strong>ValoraGo</strong> — Cada gasto cuenta.</p>
     </div>
   </div>
@@ -96,16 +86,20 @@
         </div>
         <div class="form-group">
           <label class="form-label">Contraseña</label>
-          <input type="password" id="loginPass" class="form-control" placeholder="••••••••" />
+          <div class="input-eye-wrap">
+            <input type="password" id="loginPass" class="form-control" placeholder="••••••••" />
+            <button class="btn-eye" type="button" onclick="toggleEye('loginPass','eyeLogin')" tabindex="-1">
+              <span id="eyeLogin">👁️</span>
+            </button>
+          </div>
         </div>
         <div id="loginError" class="form-error hidden"></div>
         <button class="btn btn-primary w-full mt-3" id="btnLogin" onclick="handleLogin()">
-          <span>Ingresar</span>
+          Ingresar
         </button>
         <p class="login-footer mt-4">
           ¿No tienes cuenta?
-          <a href="#" onclick="showTab('register');return false"
-            style="color:var(--brand-primary);font-weight:600;">Regístrate gratis</a>
+          <a href="#" onclick="showTab('register');return false" style="color:var(--brand-primary);font-weight:600;">Regístrate gratis</a>
         </p>
       </div>
 
@@ -123,20 +117,29 @@
         </div>
         <div class="form-group">
           <label class="form-label">Contraseña</label>
-          <input type="password" id="regPass" class="form-control" placeholder="Mínimo 6 caracteres" />
+          <div class="input-eye-wrap">
+            <input type="password" id="regPass" class="form-control" placeholder="Mínimo 6 caracteres" />
+            <button class="btn-eye" type="button" onclick="toggleEye('regPass','eyeReg1')" tabindex="-1">
+              <span id="eyeReg1">👁️</span>
+            </button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Confirmar contraseña</label>
-          <input type="password" id="regPass2" class="form-control" placeholder="Repite tu contraseña" />
+          <div class="input-eye-wrap">
+            <input type="password" id="regPass2" class="form-control" placeholder="Repite tu contraseña" />
+            <button class="btn-eye" type="button" onclick="toggleEye('regPass2','eyeReg2')" tabindex="-1">
+              <span id="eyeReg2">👁️</span>
+            </button>
+          </div>
         </div>
         <div id="regError" class="form-error hidden"></div>
         <button class="btn btn-primary w-full mt-3" id="btnReg" onclick="handleRegister()">
-          <span>Crear cuenta</span>
+          Crear cuenta
         </button>
         <p class="login-footer mt-4">
           ¿Ya tienes cuenta?
-          <a href="#" onclick="showTab('login');return false"
-            style="color:var(--brand-primary);font-weight:600;">Inicia sesión</a>
+          <a href="#" onclick="showTab('login');return false" style="color:var(--brand-primary);font-weight:600;">Inicia sesión</a>
         </p>
       </div>
     </div>
@@ -150,6 +153,14 @@
     if (s) window.location.href = 'pages/dashboard.html';
     initTheme();
   })();
+
+  function toggleEye(inputId, eyeId) {
+    const input = document.getElementById(inputId);
+    const eye   = document.getElementById(eyeId);
+    const show  = input.type === 'password';
+    input.type      = show ? 'text' : 'password';
+    eye.textContent = show ? '🙈' : '👁️';
+  }
 
   function showTab(tab) {
     document.getElementById('formLogin').classList.toggle('hidden', tab !== 'login');
