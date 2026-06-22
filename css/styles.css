@@ -828,3 +828,6 @@ img { max-width: 100%; }
   .login-art      { display: none; }
   .login-form-area { width: 100%; padding: 32px 20px; }
 }
+
+body { overflow: hidden; }
+  @media (max-width: 900px) { body { overflow: auto; } }
