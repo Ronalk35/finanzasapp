@@ -6,6 +6,14 @@
   <link rel="icon" href="img/favicon.ico" type="image/x-icon"/>
   <title>Ingresar – ValoraGo</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    body { overflow: hidden; }
+    @media (max-width: 900px) { body { overflow: auto; } }
+    /* Forzar hidden para que funcione sin importar otros estilos */
+    #formRegister { display: none; }
+    #formRegister.visible { display: block; }
+    #formLogin.hidden-form { display: none; }
+  </style>
 </head>
 <body>
 
@@ -104,7 +112,7 @@
       </div>
 
       <!-- REGISTRO -->
-      <div id="formRegister" class="hidden">
+      <div id="formRegister">
         <h2 class="login-heading">Crear cuenta</h2>
         <p class="login-sub">Completa los datos para comenzar</p>
         <div class="form-group">
@@ -172,10 +180,17 @@
   }
 
   function showTab(tab) {
-    document.getElementById('formLogin').classList.toggle('hidden', tab !== 'login');
-    document.getElementById('formRegister').classList.toggle('hidden', tab !== 'register');
-    document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
-    document.getElementById('tabReg').classList.toggle('active', tab === 'register');
+    if (tab === 'login') {
+      document.getElementById('formLogin').classList.remove('hidden-form');
+      document.getElementById('formRegister').classList.remove('visible');
+      document.getElementById('tabLogin').classList.add('active');
+      document.getElementById('tabReg').classList.remove('active');
+    } else {
+      document.getElementById('formLogin').classList.add('hidden-form');
+      document.getElementById('formRegister').classList.add('visible');
+      document.getElementById('tabLogin').classList.remove('active');
+      document.getElementById('tabReg').classList.add('active');
+    }
     clearErrors();
   }
   function clearErrors() {
