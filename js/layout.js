@@ -52,8 +52,8 @@ function renderLayout(activePage, pageTitle) {
           🚪 Cerrar sesión
         </button>
         <div class="sidebar-copyright">
-          ©2026 <a href="https://ronalk35.github.io/ronaldurbano.c/" target="_blank" rel="noopener">Ronald U.</a><br/>
-          - ValoraGo Todos los derechos reservados
+          ©2026 - ValoraGo - <a href="https://ronalk35.github.io/ronaldurbano.c/" target="_blank" rel="noopener">Ronald U.</a><br/>
+          Todos los derechos reservados
         </div>
       </div>
     </aside>
