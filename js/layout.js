@@ -21,8 +21,8 @@ function renderLayout(activePage, pageTitle) {
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="brand-logo">
-          <div class="brand-icon">💚</div>
-          <span class="brand-name">ValoraGo</span>
+          <div class="brand-icon" style="background:linear-gradient(135deg,#84CC16,#22C55E);box-shadow:0 4px 12px rgba(132,204,22,.3)">💚</div>
+<span class="brand-name">Valora<em style="font-style:normal;color:#84CC16">Go</em></span>
         </div>
         <div class="brand-tagline">Finanzas personales</div>
       </div>
