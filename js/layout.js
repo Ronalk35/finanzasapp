@@ -21,7 +21,7 @@ function renderLayout(activePage, pageTitle) {
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="brand-logo">
-          <div class="brand-icon">💰</div>
+          <div class="brand-icon">💚</div>
           <span class="brand-name">ValoraGo</span>
         </div>
         <div class="brand-tagline">Finanzas personales</div>
