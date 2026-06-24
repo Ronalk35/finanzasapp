@@ -1,4 +1,4 @@
-# 💚 FinanzasApp – Sistema Web de Finanzas Personales
+# 💚 ValoraGo – Sistema Web de Finanzas Personales
 
 Aplicación web completa para gestión de finanzas personales. HTML + CSS + JavaScript puro, con Google Sheets como base de datos mediante Google Apps Script. Lista para GitHub Pages.
 
